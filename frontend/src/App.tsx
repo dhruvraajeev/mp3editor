@@ -2,6 +2,7 @@ import { FolderOpen, Music, RotateCw, Search, TriangleAlert } from 'lucide-react
 import { useEffect, useRef, useState } from 'react'
 import { api, coverUrl, fmt, type Track } from './api'
 import Editor from './Editor'
+import Blaze from './Blaze'
 import Embers from './Embers'
 
 export type Toast = (text: string, bad?: boolean) => void
@@ -39,7 +40,7 @@ export default function App() {
       const list = await api.files(folder)
       setTracks(list)
       setError('')
-      setPicked((p) => (list.some((t) => t.path === p) ? p : list[0]?.path))
+      setPicked((p) => (list.some((t) => t.path === p) ? p : undefined))
       try {
         localStorage.setItem(DIR_KEY, folder)
       } catch { /* private window: the folder just isn't remembered */ }
@@ -60,7 +61,8 @@ export default function App() {
     return () => removeEventListener('beforeunload', warn)
   }, [])
 
-  const pick = (path: string) => {
+  // undefined goes back to the landing page
+  const pick = (path?: string) => {
     if (path === picked || (dirty.current && !confirm('Discard your unsaved changes?'))) return
     dirty.current = false
     setPicked(path)
@@ -83,12 +85,12 @@ export default function App() {
       <Embers className="pointer-events-none fixed inset-0 -z-10 size-full" />
       <div className="mx-auto flex h-full max-w-[1500px] flex-col gap-4 p-4">
         <header className="flex flex-wrap items-center gap-3 px-1">
-          <div className="flex shrink-0 items-center gap-2.5 pr-2">
+          <button onClick={() => pick(undefined)} className="flex shrink-0 items-center gap-2.5 rounded-lg pr-2" aria-label="Home" title="Home">
             <Flame />
             <span className="text-[15px] font-semibold tracking-[-0.01em]">
               <span className="glow-text">mp3</span>editor
             </span>
-          </div>
+          </button>
           <form
             onSubmit={(e) => {
               e.preventDefault()
@@ -167,8 +169,8 @@ export default function App() {
             ) : (
               <div className="panel grid h-full min-h-96 place-items-center p-10 text-center">
                 <div className="flex flex-col items-center">
-                  <div className="orb size-36" aria-hidden />
-                  <h1 className="mt-8 text-2xl font-semibold tracking-[-0.03em]">{tracks.length ? 'Pick a track' : 'Open a folder of songs'}</h1>
+                  <Blaze className="h-64 w-52" />
+                  <h1 className="mt-2 text-2xl font-semibold tracking-[-0.03em]">{tracks.length ? 'Pick a track' : 'Open a folder of songs'}</h1>
                   <p className="mt-2 text-muted">MP3, M4A, WAV, AIFF, FLAC or AAC. Tags, artists, cover art and where the song ends, written into the file or out as an M4A.</p>
                 </div>
               </div>
