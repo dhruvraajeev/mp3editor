@@ -18,14 +18,13 @@ const savedDir = () => {
 }
 
 // One screen: a folder's songs on the left; on the right, the landing page, one song's editor, or the batch
-// editor when several are selected (⌘-click, ⇧-click, or the row checkboxes).
+// editor when several are selected (⌘- or ⇧-click, the row checkboxes, or ⌘A).
 export default function App() {
   const [dir, setDir] = useState(savedDir)
   const [tracks, setTracks] = useState<Track[]>([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [selected, setSelected] = useState<string[]>([])
-  const anchor = useRef<string>(undefined) // where a ⇧-click range starts
   const [query, setQuery] = useState('')
   const [toast, setToast] = useState<{ text: string; bad: boolean; id: number }>()
   const dirty = useRef(false)
@@ -75,21 +74,24 @@ export default function App() {
     dirty.current = false
     setSelected(paths)
   }
-  const toggle = (path: string) => {
-    anchor.current = path
-    select(selected.includes(path) ? selected.filter((p) => p !== path) : [...selected, path])
-  }
-  const click = (e: MouseEvent, path: string) => {
-    const from = shown.findIndex((t) => t.path === anchor.current)
-    if (e.shiftKey && from >= 0) {
-      const to = shown.findIndex((t) => t.path === path)
-      const range = shown.slice(Math.min(from, to), Math.max(from, to) + 1).map((t) => t.path)
-      return select(e.metaKey || e.ctrlKey ? [...new Set([...selected, ...range])] : range)
+  const toggle = (path: string) => select(selected.includes(path) ? selected.filter((p) => p !== path) : [...selected, path])
+  // ⇧ or ⌘ adds a song to the selection (or takes it back out); a plain click picks just that one
+  const click = (e: MouseEvent, path: string) => (e.shiftKey || e.metaKey || e.ctrlKey ? toggle(path) : select([path]))
+
+  // ⌘A / Ctrl+A selects every song shown, unless you're typing (then it selects the text as usual)
+  const latest = useRef(() => {})
+  latest.current = () => select(shown.map((t) => t.path))
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      const typing = (e.target as Element | null)?.closest?.('input, textarea, [contenteditable]')
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a' && !typing) {
+        e.preventDefault()
+        latest.current()
+      }
     }
-    if (e.metaKey || e.ctrlKey) return toggle(path)
-    anchor.current = path
-    select([path])
-  }
+    addEventListener('keydown', key)
+    return () => removeEventListener('keydown', key)
+  }, [])
 
   // A save lands in the same file(s), or (converted) in new M4As in ~/Downloads: then reload, and select what's here.
   const saved = async (results: Track[], from: string[]) => {
@@ -137,7 +139,7 @@ export default function App() {
             </button>
           </form>
           <p className="ml-auto hidden text-xs text-faint md:block">
-            <Kbd>⌘</Kbd>/<Kbd>⇧</Kbd>-click selects several · <Kbd>⌘V</Kbd> pastes a cover · <Kbd>⌘S</Kbd> saves
+            <Kbd>⇧</Kbd>-click adds a song · <Kbd>⌘A</Kbd> selects all · <Kbd>⌘V</Kbd> pastes a cover · <Kbd>⌘S</Kbd> saves
           </p>
         </header>
 

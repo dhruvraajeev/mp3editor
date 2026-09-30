@@ -32,7 +32,7 @@ Every edit (tags, cover, where the song cuts off) is a draft until Save or ⌘S.
 | M4A | overwrites it in place (a cut re-encodes) |
 | WAV, AIFF, FLAC, AAC | always writes a new `~/Downloads/<name>.m4a` |
 
-**Several at once:** ⌘-click, ⇧-click, or tick the row checkboxes (the header box selects all). The batch editor
+**Several at once:** ⇧-click (or ⌘-click) adds songs one by one, or tick the row checkboxes; ⌘A or the header box selects all. The batch editor
 writes only the fields you change; a field the songs disagree on shows "Mixed" and is left alone unless you type
 into it. It can also set or remove every cover, split each song's own artist line into names, and convert all
 the MP3s. Title and the cut stay per-song.
