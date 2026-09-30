@@ -32,6 +32,11 @@ Every edit (tags, cover, where the song cuts off) is a draft until Save or ⌘S.
 | M4A | overwrites it in place (a cut re-encodes) |
 | WAV, AIFF, FLAC, AAC | always writes a new `~/Downloads/<name>.m4a` |
 
+**Several at once:** ⌘-click, ⇧-click, or tick the row checkboxes (the header box selects all). The batch editor
+writes only the fields you change; a field the songs disagree on shows "Mixed" and is left alone unless you type
+into it. It can also set or remove every cover, split each song's own artist line into names, and convert all
+the MP3s. Title and the cut stay per-song.
+
 M4A is 256 kbps AAC via macOS's built-in `afconvert`. A new M4A never overwrites an existing file (`name 2.m4a`).
 Before a cut changes a file's audio, the original is copied to `~/.mp3editor/backups/`.
 

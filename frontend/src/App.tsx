@@ -1,6 +1,7 @@
-import { FolderOpen, Music, RotateCw, Search, TriangleAlert } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { Check, FolderOpen, Minus, Music, RotateCw, Search, TriangleAlert } from 'lucide-react'
+import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { api, coverUrl, fmt, type Track } from './api'
+import Batch from './Batch'
 import Editor from './Editor'
 import Blaze from './Blaze'
 import Embers from './Embers'
@@ -16,13 +17,15 @@ const savedDir = () => {
   }
 }
 
-// One screen: a folder's MP3s on the left, the picked one's editor on the right.
+// One screen: a folder's songs on the left; on the right, the landing page, one song's editor, or the batch
+// editor when several are selected (⌘-click, ⇧-click, or the row checkboxes).
 export default function App() {
   const [dir, setDir] = useState(savedDir)
   const [tracks, setTracks] = useState<Track[]>([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [picked, setPicked] = useState<string>()
+  const [selected, setSelected] = useState<string[]>([])
+  const anchor = useRef<string>(undefined) // where a ⇧-click range starts
   const [query, setQuery] = useState('')
   const [toast, setToast] = useState<{ text: string; bad: boolean; id: number }>()
   const dirty = useRef(false)
@@ -40,7 +43,7 @@ export default function App() {
       const list = await api.files(folder)
       setTracks(list)
       setError('')
-      setPicked((p) => (list.some((t) => t.path === p) ? p : undefined))
+      setSelected((sel) => sel.filter((p) => list.some((t) => t.path === p)))
       try {
         localStorage.setItem(DIR_KEY, folder)
       } catch { /* private window: the folder just isn't remembered */ }
@@ -61,31 +64,54 @@ export default function App() {
     return () => removeEventListener('beforeunload', warn)
   }, [])
 
-  // undefined goes back to the landing page
-  const pick = (path?: string) => {
-    if (path === picked || (dirty.current && !confirm('Discard your unsaved changes?'))) return
-    dirty.current = false
-    setPicked(path)
-  }
-
-  // A save lands in the same file, or (converted) in a new M4A in ~/Downloads: then reload, and open it if it's here.
-  const saved = async (t: Track, from: string) => {
-    if (t.path === from) return setTracks((ts) => ts.map((x) => (x.path === t.path ? t : x)))
-    dirty.current = false
-    if ((await open(dir)).some((x) => x.path === t.path)) setPicked(t.path)
-  }
-  const track = tracks.find((t) => t.path === picked)
   const needle = query.trim().toLowerCase()
   const shown = needle
     ? tracks.filter((t) => [t.name, t.tags.title, t.tags.artist, t.tags.album].some((s) => s.toLowerCase().includes(needle)))
     : tracks
+
+  // [] goes back to the landing page
+  const select = (paths: string[]) => {
+    if (paths.join('\n') === selected.join('\n') || (dirty.current && !confirm('Discard your unsaved changes?'))) return
+    dirty.current = false
+    setSelected(paths)
+  }
+  const toggle = (path: string) => {
+    anchor.current = path
+    select(selected.includes(path) ? selected.filter((p) => p !== path) : [...selected, path])
+  }
+  const click = (e: MouseEvent, path: string) => {
+    const from = shown.findIndex((t) => t.path === anchor.current)
+    if (e.shiftKey && from >= 0) {
+      const to = shown.findIndex((t) => t.path === path)
+      const range = shown.slice(Math.min(from, to), Math.max(from, to) + 1).map((t) => t.path)
+      return select(e.metaKey || e.ctrlKey ? [...new Set([...selected, ...range])] : range)
+    }
+    if (e.metaKey || e.ctrlKey) return toggle(path)
+    anchor.current = path
+    select([path])
+  }
+
+  // A save lands in the same file(s), or (converted) in new M4As in ~/Downloads: then reload, and select what's here.
+  const saved = async (results: Track[], from: string[]) => {
+    const inPlace = new Set(from)
+    if (results.every((t) => inPlace.has(t.path))) {
+      const byPath = new Map(results.map((t) => [t.path, t]))
+      return setTracks((ts) => ts.map((x) => byPath.get(x.path) ?? x))
+    }
+    dirty.current = false
+    const list = await open(dir)
+    const here = results.map((t) => t.path).filter((p) => list.some((x) => x.path === p))
+    if (here.length) setSelected(here)
+  }
+  const chosen = tracks.filter((t) => selected.includes(t.path))
+  const allShown = shown.length > 0 && shown.every((t) => selected.includes(t.path))
 
   return (
     <>
       <Embers className="pointer-events-none fixed inset-0 -z-10 size-full" />
       <div className="mx-auto flex h-full max-w-[1500px] flex-col gap-4 p-4">
         <header className="flex flex-wrap items-center gap-3 px-1">
-          <button onClick={() => pick(undefined)} className="flex shrink-0 items-center gap-2.5 rounded-lg pr-2" aria-label="Home" title="Home">
+          <button onClick={() => select([])} className="flex shrink-0 items-center gap-2.5 rounded-lg pr-2" aria-label="Home" title="Home">
             <Flame />
             <span className="text-[15px] font-semibold tracking-[-0.01em]">
               <span className="glow-text">mp3</span>editor
@@ -111,7 +137,7 @@ export default function App() {
             </button>
           </form>
           <p className="ml-auto hidden text-xs text-faint md:block">
-            <Kbd>⌘V</Kbd> pastes a cover · <Kbd>⌘S</Kbd> saves
+            <Kbd>⌘</Kbd>/<Kbd>⇧</Kbd>-click selects several · <Kbd>⌘V</Kbd> pastes a cover · <Kbd>⌘S</Kbd> saves
           </p>
         </header>
 
@@ -127,7 +153,15 @@ export default function App() {
                   className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-faint"
                 />
               </label>
-              <span className="num px-1 text-xs text-muted">{tracks.length}</span>
+              <button
+                onClick={() => select(allShown ? [] : shown.map((t) => t.path))}
+                className="flex items-center gap-2 rounded-full px-1 text-xs text-muted hover:text-text"
+                aria-label={allShown ? 'Select none' : 'Select all'}
+                title={allShown ? 'Select none' : 'Select all'}
+              >
+                <Box on={allShown} some={!allShown && selected.length > 0} />
+                <span className="num">{selected.length > 1 ? `${selected.length}/` : ''}{tracks.length}</span>
+              </button>
             </div>
             <ul className="min-h-0 flex-1 overflow-auto p-2">
               {error && (
@@ -138,13 +172,13 @@ export default function App() {
               )}
               {!error && !loading && tracks.length === 0 && <li className="p-3 text-[13px] text-muted">No audio files in this folder.</li>}
               {shown.map((t) => (
-                <li key={t.path}>
+                <li key={t.path} className="group relative">
                   <button
-                    onClick={() => pick(t.path)}
-                    aria-current={t.path === picked}
-                    className="group relative flex w-full items-center gap-3 rounded-xl p-2 text-left transition-colors hover:bg-panel-2 aria-[current=true]:bg-panel-3"
+                    onClick={(e) => click(e, t.path)}
+                    aria-current={selected.includes(t.path)}
+                    className="relative flex w-full items-center gap-3 rounded-xl p-2 text-left transition-colors select-none hover:bg-panel-2 aria-[current=true]:bg-panel-3"
                   >
-                    {t.path === picked && (
+                    {selected.includes(t.path) && (
                       <span className="absolute top-2 bottom-2 -left-2 w-[3px] rounded-full bg-accent shadow-[0_0_12px_2px_rgb(155_107_255/0.7)]" aria-hidden />
                     )}
                     <Thumb track={t} />
@@ -158,19 +192,28 @@ export default function App() {
                     </span>
                     <span className="num shrink-0 text-[11px] text-faint">{fmt(t.duration).slice(0, -3)}</span>
                   </button>
+                  <button
+                    onClick={() => toggle(t.path)}
+                    className={`absolute top-1 left-1 rounded-md transition-opacity group-hover:opacity-100 focus-visible:opacity-100 ${selected.length > 1 ? 'opacity-100' : 'opacity-0'}`}
+                    aria-label={`${selected.includes(t.path) ? 'Deselect' : 'Select'} ${t.tags.title || t.name}`}
+                  >
+                    <Box on={selected.includes(t.path)} />
+                  </button>
                 </li>
               ))}
             </ul>
           </aside>
 
           <main className="min-h-0 min-w-0">
-            {track ? (
-              <Editor key={track.path} track={track} onSaved={saved} onDirty={(d) => (dirty.current = d)} say={say} />
+            {chosen.length === 1 ? (
+              <Editor key={chosen[0].path} track={chosen[0]} onSaved={(t, from) => saved([t], [from])} onDirty={(d) => (dirty.current = d)} say={say} />
+            ) : chosen.length > 1 ? (
+              <Batch key={selected.join('\n')} tracks={chosen} onSaved={(ts) => saved(ts, chosen.map((t) => t.path))} onDirty={(d) => (dirty.current = d)} say={say} />
             ) : (
               <div className="panel grid h-full min-h-96 place-items-center p-10 text-center">
                 <div className="flex flex-col items-center">
                   <Blaze className="h-64 w-52" />
-                  <h1 className="mt-2 text-2xl font-semibold tracking-[-0.03em]">{tracks.length ? 'Pick a track' : 'Open a folder of songs'}</h1>
+                  <h1 className="mt-2 text-2xl font-semibold tracking-[-0.03em]">{tracks.length ? 'Pick a track, or several' : 'Open a folder of songs'}</h1>
                   <p className="mt-2 text-muted">MP3, M4A, WAV, AIFF, FLAC or AAC. Tags, artists, cover art and where the song ends, written into the file or out as an M4A.</p>
                 </div>
               </div>
@@ -209,6 +252,18 @@ export function Explicit() {
   return (
     <span title="Explicit" className="grid size-4 shrink-0 place-items-center rounded-[3px] bg-muted text-[10px] leading-none font-semibold text-bg">
       E
+    </span>
+  )
+}
+
+/** A checkbox look: checked, partly checked (`some`), or empty. */
+function Box({ on, some }: { on: boolean; some?: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className={`grid size-4 place-items-center rounded-[5px] border ${on || some ? 'border-accent bg-accent text-bg shadow-[0_0_10px_-2px_rgb(155_107_255/0.9)]' : 'border-border-strong bg-panel-2'}`}
+    >
+      {on ? <Check size={11} strokeWidth={3} /> : some ? <Minus size={11} strokeWidth={3} /> : null}
     </span>
   )
 }

@@ -4,8 +4,8 @@ import { api, coverUrl, fmt, splitArtists, type Tags, type Track } from './api'
 import { Explicit, type Toast } from './App'
 import Ending from './Ending'
 
-const DATE = /^(\d{4}(-\d{2}(-\d{2})?)?)?$/
-const input = 'field h-9 w-full px-3 text-[13px]'
+export const DATE = /^(\d{4}(-\d{2}(-\d{2})?)?)?$/
+export const input = 'field h-9 w-full px-3 text-[13px]'
 
 // The picked track. Everything is a draft (tags, cover, where the song cuts off) until Save or ⌘S writes it.
 // MP3 and M4A are saved in place; any other format, or an MP3 with "Convert to M4A" on, comes out as a new M4A
@@ -275,7 +275,7 @@ export default function Editor({ track, onSaved, onDirty, say }: {
 }
 
 // A <label> around one control; `group` makes it a plain div, for rows holding several buttons.
-function Row({ label, hint, error, group, children }: { label: string; hint?: string; error?: string; group?: boolean; children: ReactNode }) {
+export function Row({ label, hint, error, group, children }: { label: string; hint?: string; error?: string; group?: boolean; children: ReactNode }) {
   const Tag = group ? 'div' : 'label'
   return (
     <Tag className="block">
@@ -289,12 +289,12 @@ function Row({ label, hint, error, group, children }: { label: string; hint?: st
   )
 }
 
-function Chip({ children }: { children: ReactNode }) {
+export function Chip({ children }: { children: ReactNode }) {
   return <span className="num rounded-full border border-border bg-panel-2 px-2.5 py-1 text-[11px] text-muted">{children}</span>
 }
 
 /** Names as removable chips; typing a name and pressing Enter (or comma) adds it. */
-function Artists({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
+export function Artists({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
   const [text, setText] = useState('')
   const add = () => {
     const name = text.trim().replace(/,$/, '')
